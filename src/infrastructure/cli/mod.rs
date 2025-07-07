@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
-    
+
     #[arg(short, long, global = true)]
     pub verbose: bool,
 }
@@ -20,39 +20,39 @@ pub enum Commands {
         /// Source provider (notion, linear, all)
         #[arg(short, long, default_value = "all")]
         source: String,
-        
+
         /// Limit number of results
         #[arg(short, long)]
         limit: Option<usize>,
-        
+
         /// Additional filters (key=value pairs)
         #[arg(short, long)]
         filter: Vec<String>,
     },
-    
+
     /// Get a specific resource by ID
     Get {
         /// Resource ID
         id: String,
     },
-    
+
     /// Search for resources
     Search {
         /// Search query
         query: String,
-        
+
         /// Source providers to search (notion, linear, all)
         #[arg(short, long, default_value = "all")]
         source: Vec<String>,
-        
+
         /// Limit number of results
         #[arg(short, long)]
         limit: Option<usize>,
     },
-    
+
     /// List configured providers
     Providers,
-    
+
     /// Configure API credentials
     Config {
         #[command(subcommand)]
@@ -69,10 +69,10 @@ pub enum ConfigAction {
         /// API key
         key: String,
     },
-    
+
     /// List current configuration
     List,
-    
+
     /// Test provider connections
     Test {
         /// Provider to test (optional, tests all if not specified)

@@ -1,11 +1,11 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 use crate::{
-    domain::{Resource, ResourceSource, Query, DomainError},
+    domain::{DomainError, Query, Resource, ResourceSource},
     ports::ResourceProvider,
 };
 
@@ -75,23 +75,32 @@ impl NotionAdapter {
 
         loop {
             let mut request = self.client.get(&url);
-            
+
             if let Some(cursor) = &start_cursor {
                 request = request.query(&[("start_cursor", cursor)]);
             }
 
-            let response = request.send().await
+            let response = request
+                .send()
+                .await
                 .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
             if !response.status().is_success() {
-                let error_text = response.text().await
+                let error_text = response
+                    .text()
+                    .await
                     .map_err(|e| DomainError::ProviderError(e.to_string()))?;
-                return Err(DomainError::ProviderError(format!("Notion API error: {}", error_text)));
+                return Err(DomainError::ProviderError(format!(
+                    "Notion API error: {}",
+                    error_text
+                )));
             }
 
-            let blocks_response: NotionBlocksResponse = response.json().await
+            let blocks_response: NotionBlocksResponse = response
+                .json()
+                .await
                 .map_err(|e| DomainError::ProviderError(e.to_string()))?;
-            
+
             all_blocks.extend(blocks_response.results);
 
             if !blocks_response.has_more {
@@ -106,14 +115,18 @@ impl NotionAdapter {
 
     fn extract_text_from_blocks(&self, blocks: &[NotionBlock]) -> String {
         let mut text = String::new();
-        
+
         for block in blocks {
             match block.block_type.as_str() {
                 "paragraph" | "heading_1" | "heading_2" | "heading_3" => {
                     if let Some(content) = block.content.get(&block.block_type) {
-                        if let Some(rich_text_array) = content.get("rich_text").and_then(|rt| rt.as_array()) {
+                        if let Some(rich_text_array) =
+                            content.get("rich_text").and_then(|rt| rt.as_array())
+                        {
                             for rich_text in rich_text_array {
-                                if let Some(plain_text) = rich_text.get("plain_text").and_then(|pt| pt.as_str()) {
+                                if let Some(plain_text) =
+                                    rich_text.get("plain_text").and_then(|pt| pt.as_str())
+                                {
                                     text.push_str(plain_text);
                                     text.push('\n');
                                 }
@@ -123,10 +136,14 @@ impl NotionAdapter {
                 }
                 "bulleted_list_item" | "numbered_list_item" => {
                     if let Some(content) = block.content.get(&block.block_type) {
-                        if let Some(rich_text_array) = content.get("rich_text").and_then(|rt| rt.as_array()) {
+                        if let Some(rich_text_array) =
+                            content.get("rich_text").and_then(|rt| rt.as_array())
+                        {
                             text.push_str("• ");
                             for rich_text in rich_text_array {
-                                if let Some(plain_text) = rich_text.get("plain_text").and_then(|pt| pt.as_str()) {
+                                if let Some(plain_text) =
+                                    rich_text.get("plain_text").and_then(|pt| pt.as_str())
+                                {
                                     text.push_str(plain_text);
                                 }
                             }
@@ -137,27 +154,33 @@ impl NotionAdapter {
                 _ => {}
             }
         }
-        
+
         text
     }
 
-    async fn page_to_resource(&self, page_data: &serde_json::Value) -> Result<Resource, DomainError> {
-        let page_id = page_data.get("id")
+    async fn page_to_resource(
+        &self,
+        page_data: &serde_json::Value,
+    ) -> Result<Resource, DomainError> {
+        let page_id = page_data
+            .get("id")
             .and_then(|id| id.as_str())
             .ok_or_else(|| DomainError::ProviderError("Missing page ID".to_string()))?;
 
         let title = self.extract_title_from_page(page_data);
-        
+
         let blocks = self.get_page_blocks(page_id).await?;
         let content = self.extract_text_from_blocks(&blocks);
 
-        let created_at = page_data.get("created_time")
+        let created_at = page_data
+            .get("created_time")
             .and_then(|ct| ct.as_str())
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(Utc::now);
 
-        let updated_at = page_data.get("last_edited_time")
+        let updated_at = page_data
+            .get("last_edited_time")
             .and_then(|edited_time| edited_time.as_str())
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&Utc))
@@ -170,7 +193,7 @@ impl NotionAdapter {
 
         Ok(Resource {
             id: format!("notion_{}", page_id),
-            source: ResourceSource::Notion { 
+            source: ResourceSource::Notion {
                 page_id: page_id.to_string(),
                 database_id: None,
             },
@@ -188,7 +211,9 @@ impl NotionAdapter {
             for (key, value) in properties.as_object().unwrap_or(&serde_json::Map::new()) {
                 if let Some(title_array) = value.get("title").and_then(|t| t.as_array()) {
                     if let Some(first_title) = title_array.first() {
-                        if let Some(plain_text) = first_title.get("plain_text").and_then(|pt| pt.as_str()) {
+                        if let Some(plain_text) =
+                            first_title.get("plain_text").and_then(|pt| pt.as_str())
+                        {
                             return plain_text.to_string();
                         }
                     }
@@ -203,11 +228,12 @@ impl NotionAdapter {
 impl ResourceProvider for NotionAdapter {
     async fn fetch_resources(&self, query: &Query) -> Result<Vec<Resource>, DomainError> {
         // For now, we'll need a database_id from the query filters
-        let database_id = query.filters.get("database_id")
-            .ok_or_else(|| DomainError::InvalidQuery("database_id required for Notion queries".to_string()))?;
+        let database_id = query.filters.get("database_id").ok_or_else(|| {
+            DomainError::InvalidQuery("database_id required for Notion queries".to_string())
+        })?;
 
         let url = format!("https://api.notion.com/v1/databases/{}/query", database_id);
-        
+
         let notion_query = NotionDatabaseQuery {
             filter: None,
             sorts: None,
@@ -215,7 +241,8 @@ impl ResourceProvider for NotionAdapter {
             page_size: query.limit.map(|l| l as u32),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&notion_query)
             .send()
@@ -223,12 +250,19 @@ impl ResourceProvider for NotionAdapter {
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await
+            let error_text = response
+                .text()
+                .await
                 .map_err(|e| DomainError::ProviderError(e.to_string()))?;
-            return Err(DomainError::ProviderError(format!("Notion API error: {}", error_text)));
+            return Err(DomainError::ProviderError(format!(
+                "Notion API error: {}",
+                error_text
+            )));
         }
 
-        let query_response: NotionQueryResponse = response.json().await
+        let query_response: NotionQueryResponse = response
+            .json()
+            .await
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         let mut resources = Vec::new();
@@ -245,22 +279,30 @@ impl ResourceProvider for NotionAdapter {
     async fn fetch_resource_by_id(&self, id: &str) -> Result<Resource, DomainError> {
         // Remove the "notion_" prefix if present
         let page_id = id.strip_prefix("notion_").unwrap_or(id);
-        
+
         let url = format!("https://api.notion.com/v1/pages/{}", page_id);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await
+            let error_text = response
+                .text()
+                .await
                 .map_err(|e| DomainError::ProviderError(e.to_string()))?;
-            return Err(DomainError::ResourceNotFound(format!("Notion page not found: {}", error_text)));
+            return Err(DomainError::ResourceNotFound(format!(
+                "Notion page not found: {}",
+                error_text
+            )));
         }
 
-        let page_data: serde_json::Value = response.json().await
+        let page_data: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         self.page_to_resource(&page_data).await
@@ -268,7 +310,7 @@ impl ResourceProvider for NotionAdapter {
 
     async fn search(&self, query: &str) -> Result<Vec<Resource>, DomainError> {
         let url = "https://api.notion.com/v1/search";
-        
+
         let search_body = serde_json::json!({
             "query": query,
             "filter": {
@@ -277,7 +319,8 @@ impl ResourceProvider for NotionAdapter {
             }
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(url)
             .json(&search_body)
             .send()
@@ -285,12 +328,19 @@ impl ResourceProvider for NotionAdapter {
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await
+            let error_text = response
+                .text()
+                .await
                 .map_err(|e| DomainError::ProviderError(e.to_string()))?;
-            return Err(DomainError::ProviderError(format!("Notion search error: {}", error_text)));
+            return Err(DomainError::ProviderError(format!(
+                "Notion search error: {}",
+                error_text
+            )));
         }
 
-        let search_response: NotionQueryResponse = response.json().await
+        let search_response: NotionQueryResponse = response
+            .json()
+            .await
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         let mut resources = Vec::new();

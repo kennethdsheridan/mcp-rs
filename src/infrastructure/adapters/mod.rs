@@ -1,2 +1,2 @@
-pub mod notion;
 pub mod linear;
+pub mod notion;

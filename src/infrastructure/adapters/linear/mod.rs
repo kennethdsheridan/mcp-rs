@@ -1,11 +1,11 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 use crate::{
-    domain::{Resource, ResourceSource, Query, DomainError},
+    domain::{DomainError, Query, Resource, ResourceSource},
     ports::ResourceProvider,
 };
 
@@ -113,24 +113,30 @@ impl LinearAdapter {
 
     fn issue_to_resource(&self, issue: Issue) -> Resource {
         let mut metadata = HashMap::new();
-        
+
         metadata.insert("state".to_string(), serde_json::json!(issue.state.name));
-        
+
         if let Some(assignee) = &issue.assignee {
-            metadata.insert("assignee".to_string(), serde_json::json!({
-                "name": assignee.name,
-                "email": assignee.email,
-            }));
+            metadata.insert(
+                "assignee".to_string(),
+                serde_json::json!({
+                    "name": assignee.name,
+                    "email": assignee.email,
+                }),
+            );
         }
-        
+
         let labels: Vec<String> = issue.labels.nodes.into_iter().map(|l| l.name).collect();
         metadata.insert("labels".to_string(), serde_json::json!(labels));
-        
+
         if let Some(project) = &issue.project {
-            metadata.insert("project".to_string(), serde_json::json!({
-                "id": project.id,
-                "name": project.name,
-            }));
+            metadata.insert(
+                "project".to_string(),
+                serde_json::json!({
+                    "id": project.id,
+                    "name": project.name,
+                }),
+            );
         }
 
         Resource {
@@ -157,7 +163,8 @@ impl LinearAdapter {
             variables,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://api.linear.app/graphql")
             .json(&request)
             .send()
@@ -165,20 +172,31 @@ impl LinearAdapter {
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await
+            let error_text = response
+                .text()
+                .await
                 .map_err(|e| DomainError::ProviderError(e.to_string()))?;
-            return Err(DomainError::ProviderError(format!("Linear API error: {}", error_text)));
+            return Err(DomainError::ProviderError(format!(
+                "Linear API error: {}",
+                error_text
+            )));
         }
 
-        let graphql_response: GraphQLResponse<T> = response.json().await
+        let graphql_response: GraphQLResponse<T> = response
+            .json()
+            .await
             .map_err(|e| DomainError::ProviderError(e.to_string()))?;
 
         if let Some(errors) = graphql_response.errors {
             let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-            return Err(DomainError::ProviderError(format!("GraphQL errors: {}", error_messages.join(", "))));
+            return Err(DomainError::ProviderError(format!(
+                "GraphQL errors: {}",
+                error_messages.join(", ")
+            )));
         }
 
-        graphql_response.data
+        graphql_response
+            .data
             .ok_or_else(|| DomainError::ProviderError("No data in response".to_string()))
     }
 }
@@ -225,8 +243,10 @@ impl ResourceProvider for LinearAdapter {
         variables.insert("first".to_string(), serde_json::json!(limit));
 
         let issues_data: IssuesData = self.execute_graphql(graphql_query, Some(variables)).await?;
-        
-        let resources: Vec<Resource> = issues_data.issues.nodes
+
+        let resources: Vec<Resource> = issues_data
+            .issues
+            .nodes
             .into_iter()
             .map(|issue| self.issue_to_resource(issue))
             .collect();
@@ -236,7 +256,7 @@ impl ResourceProvider for LinearAdapter {
 
     async fn fetch_resource_by_id(&self, id: &str) -> Result<Resource, DomainError> {
         let issue_id = id.strip_prefix("linear_").unwrap_or(id);
-        
+
         let graphql_query = r#"
             query GetIssue($id: String!) {
                 issue(id: $id) {
@@ -274,9 +294,10 @@ impl ResourceProvider for LinearAdapter {
         }
 
         let issue_data: IssueData = self.execute_graphql(graphql_query, Some(variables)).await?;
-        
-        let issue = issue_data.issue
-            .ok_or_else(|| DomainError::ResourceNotFound(format!("Linear issue not found: {}", issue_id)))?;
+
+        let issue = issue_data.issue.ok_or_else(|| {
+            DomainError::ResourceNotFound(format!("Linear issue not found: {}", issue_id))
+        })?;
 
         Ok(self.issue_to_resource(issue))
     }
@@ -322,8 +343,10 @@ impl ResourceProvider for LinearAdapter {
         }
 
         let search_data: SearchData = self.execute_graphql(graphql_query, Some(variables)).await?;
-        
-        let resources: Vec<Resource> = search_data.issue_search.nodes
+
+        let resources: Vec<Resource> = search_data
+            .issue_search
+            .nodes
             .into_iter()
             .map(|issue| self.issue_to_resource(issue))
             .collect();

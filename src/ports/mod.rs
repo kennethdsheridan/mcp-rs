@@ -1,5 +1,5 @@
+use crate::domain::{DomainError, Query, Resource};
 use async_trait::async_trait;
-use crate::domain::{Resource, Query, DomainError};
 
 #[async_trait]
 pub trait ResourceProvider: Send + Sync {

@@ -15,8 +15,14 @@ pub struct Resource {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResourceSource {
-    Notion { page_id: String, database_id: Option<String> },
-    Linear { issue_id: String, project_id: Option<String> },
+    Notion {
+        page_id: String,
+        database_id: Option<String>,
+    },
+    Linear {
+        issue_id: String,
+        project_id: Option<String>,
+    },
     Custom(String),
 }
 
@@ -38,10 +44,10 @@ pub enum QuerySource {
 pub enum DomainError {
     #[error("Resource not found: {0}")]
     ResourceNotFound(String),
-    
+
     #[error("Invalid query: {0}")]
     InvalidQuery(String),
-    
+
     #[error("Provider error: {0}")]
     ProviderError(String),
 }

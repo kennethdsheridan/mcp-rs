@@ -23,21 +23,67 @@ This project uses the **Ports and Adapters (Hexagonal Architecture)** pattern:
 
 ## Setup
 
-1. **Set up API credentials**:
+### Option 1: Using Nix (Recommended)
+
+1. **Install Determinate Nix** (if not already installed):
+   ```bash
+   curl -fsSL https://install.determinate.systems/nix | sh -s -- install --determinate
+   ```
+
+2. **Enter the development environment**:
+   ```bash
+   nix develop
+   ```
+   This will automatically set up:
+   - Rust toolchain with all required components
+   - Doppler CLI for secret management
+   - All development tools and dependencies
+   - SSL certificates and environment variables
+
+3. **Set up API credentials using Doppler** (recommended):
+   ```bash
+   # Set up Doppler project
+   doppler setup
+   
+   # Add your API keys securely
+   doppler secrets set NOTION_API_KEY=your_notion_integration_token
+   doppler secrets set LINEAR_API_KEY=your_linear_api_key
+   
+   # Run the application with managed secrets
+   doppler run -- cargo run -- --help
+   ```
+
+4. **Alternative: Manual environment setup**:
+   ```bash
+   # Copy the generated .env template and fill in your values
+   cp .env .env.local
+   # Edit .env.local with your actual API keys
+   ```
+
+### Option 2: Traditional Setup
+
+1. **Install Rust** (if not using Nix):
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+2. **Set up API credentials**:
    ```bash
    export NOTION_API_KEY="your_notion_integration_token"
    export LINEAR_API_KEY="your_linear_api_key"
    ```
 
-2. **For Notion**: 
-   - Create an integration at https://www.notion.so/my-integrations
-   - Share your databases with the integration
-   - Copy the integration token
+### API Provider Setup
 
-3. **For Linear**:
-   - Go to Linear Settings > API
-   - Create a new API key
-   - Copy the API key
+**For Notion**: 
+- Create an integration at https://www.notion.so/my-integrations
+- Share your databases with the integration
+- Copy the integration token
+
+**For Linear**:
+- Go to Linear Settings > API
+- Create a new API key
+- Copy the API key
 
 ## Usage
 
@@ -91,14 +137,55 @@ mcp-rs config test notion
 
 ## Development
 
-### Building
+### Using Nix (Recommended)
+
 ```bash
+# Enter development environment
+nix develop
+
+# Build the project
 cargo build --release
+
+# Run with Doppler-managed secrets
+doppler run -- cargo run -- --help
+
+# Run tests
+cargo test
+
+# Run with file watching (auto-rebuild)
+cargo watch -x run
+
+# Check code formatting
+cargo fmt --check
+
+# Run linting
+cargo clippy
+
+# Security audit
+cargo audit
 ```
 
-### Running
+### Traditional Development
+
 ```bash
+# Build the project
+cargo build --release
+
+# Run the application
 cargo run -- --help
+```
+
+### Building with Nix
+
+```bash
+# Build the package
+nix build
+
+# Run directly
+nix run
+
+# Run all checks (tests, linting, formatting)
+nix flake check
 ```
 
 ### Adding a new provider
